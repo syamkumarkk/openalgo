@@ -23,10 +23,11 @@ class MainClass:
             self.STRIKE_STEP = 50
             self.STRIKE_RANGE =10
         if self.index == "BANKNIFTY":
-            self.qantity = 30
+            self.quantity = 30
             self.STRIKE_STEP = 100
             self.STRIKE_RANGE =5
-        
+        self._LAST_LTP_CALL = {}
+        self.exit_all = {"PE":{"NIFTY":False,"BANKNIFTY":False},"CE":{"NIFTY":False,"BANKNIFTY":False}}
         # Get API key
         api_key = os.getenv('OPENALGO_APIKEY')
         if not api_key:
@@ -94,6 +95,15 @@ class MainClass:
         return response
     
     def get_atm(self):
+        now = time.time()
+        last = self._LAST_LTP_CALL.get(2, 0)
+
+        if now - last < 2:
+            return None  # skip API call
+
+        self._LAST_LTP_CALL[self.index] = now
+        
+
         # Fetch NIFTY LTP
         quote = self.client.quotes(symbol=self.index, exchange=self.exchange)
         if quote['status'] !='error':
@@ -170,3 +180,58 @@ class MainClass:
         ist = pytz.timezone("Asia/Kolkata")
         now_ist = datetime.now(ist).time()
         return now_ist >= dtime(timeVal, minVal)
+    
+    
+
+    def safe_ltp(self,symbol, exchange="NFO", cooldown=2):
+        """
+        Fetch LTP safely using OpenAlgo quotes()
+        cooldown = minimum seconds between calls per symbol
+        """
+        now = time.time()
+        last = self._LAST_LTP_CALL.get(symbol, 0)
+
+        if now - last < cooldown:
+            return None  # skip API call
+
+        self._LAST_LTP_CALL[symbol] = now
+
+        resp = self.client.quotes(symbol=symbol, exchange=exchange)
+
+        if resp.get("status") != "success":
+            print("⚠️ Quote error:", resp)
+            return None
+
+        return resp["data"].get("ltp")
+    
+    # ==============================
+    # UTILS
+    # ==============================
+    def next_5min_close(self,dt):
+        """Return next 5-min candle close time"""
+        minute = (dt.minute // 5 + 1) * 5
+        if minute == 60:
+            return dt.replace(hour=dt.hour + 1, minute=0, second=0, microsecond=0)
+        return dt.replace(minute=minute, second=0, microsecond=0)
+
+
+    def get_last_completed_5min_candle(self):
+        INTERVAL_MIN = 5
+        """Fetch last completed 5-min candle safely"""
+        start_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
+        df = self.get_last_min_candle(
+            INTERVAL_MIN,
+            -1,
+            start_date,
+            end_date
+        )
+
+        if not isinstance(df, pd.DataFrame) or df.empty or len(df) < 2:
+            return None
+
+        if not isinstance(df.index, pd.DatetimeIndex):
+            df.index = pd.to_datetime(df.index)
+
+        return df.iloc[-2]   # ✅ last COMPLETED candle

@@ -29,14 +29,15 @@ deltaValue = 0.45
 expiry_date = expiry_dateVal.replace("-", "")
 
 def check_signal(marketOnTheDay=0):
+    
     # -----------------------------
     # Date setup (OpenAlgo standard)
     # -----------------------------
     if main_obj.is_after_IST(9,30):
-        print("✅ Current time is greater than 9:30 AM IST")
+       # print("✅ Current time is greater than 9:30 AM IST")
         start_date = (datetime.now() - timedelta(days=marketOnTheDay)).strftime("%Y-%m-%d")
     else:
-        print("⏳ Waiting for 9:30 AM IST")
+        #print("⏳ Waiting for 9:30 AM IST")
         d = datetime.now()
         if d.weekday()==0:
             start_date   = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
@@ -44,6 +45,7 @@ def check_signal(marketOnTheDay=0):
             start_date   = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d")
         else:
             start_date   = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    
     
     end_date   = (datetime.now() - timedelta(days=0)).strftime("%Y-%m-%d")
     interval   = "5m"
@@ -64,6 +66,7 @@ def check_signal(marketOnTheDay=0):
     if len(df) < 3:
         print(f"❌ Not enough candles for EMA(5). Candles available: {len(df)}")
         return None
+    
     # -----------------------------
     # Calculate EMA(5)
     # -----------------------------
@@ -119,14 +122,22 @@ def check_signal(marketOnTheDay=0):
     # -----------------------------
     # Fetch LTP (single call only)
     # -----------------------------
-    quote = client.quotes(symbol="BANKNIFTY", exchange="NSE_INDEX")
-    if quote.get("status") == "success":
-        ltp = quote["data"]["ltp"]
+    ltp = main_obj.safe_ltp("BANKNIFTY","NSE_INDEX")
+    if ltp is not None:
         atm = round(ltp / 100) * 100
         print(f"\n📈 BANKNIFTY LTP: {ltp} | ATM: {atm}")
     else:
-        print("❌ Quote fetch failed:", quote)
+        print("❌ LTP fetch failed:", ltp)
         return  {'posflag':0,'msg':"Quote fetch failed"}
+    
+    # quote = client.quotes(symbol="BANKNIFTY", exchange="NSE_INDEX")
+    # if quote.get("status") == "success":
+    #     ltp = quote["data"]["ltp"]
+    #     atm = round(ltp / 100) * 100
+    #     print(f"\n📈 BANKNIFTY LTP: {ltp} | ATM: {atm}")
+    # else:
+    #     print("❌ Quote fetch failed:", quote)
+    #     return  {'posflag':0,'msg':"Quote fetch failed"}
     return identifyTheTrigger(atm,ltp,previous_ema,previous_low,previous_high,current_ema,current_low)
 
 
@@ -165,8 +176,8 @@ def triggerBuySeLLPE(offset='ATM',BuySeLL='BUY'):
         # ------------------------------------------
         # Fetch BANKNIFTY Spot (must print immediately)
         # ------------------------------------------
-        quote = client.quotes(symbol="BANKNIFTY", exchange="NSE_INDEX")
-        print("BANKNIFTY QUOTE:", quote)
+        # quote = client.quotes(symbol="BANKNIFTY", exchange="NSE_INDEX")
+        # print("BANKNIFTY QUOTE:", quote)
 
         # ------------------------------------------
         # Place BANKNIFTY ATM Option Order - 09DEC25
@@ -237,141 +248,175 @@ while True:
         print("✅ Current time is greater than 15:15 AM IST")
         break
         sys.exit()
-    try:
-        #runstatus =  get_running_orders()
-        #break
-        #get_running_orders()
-        if posflag==0:
-                runstatus = check_signal()                       
-                if ( runstatus==None or runstatus.get("posflag") != ""):
-                    print("❌ -----Waiting for the candles----- ❌")
-                    #break
-                if (runstatus!=None):
-                    print(runstatus) 
-                    if runstatus.get("BUY"):
-                        posflag = runstatus['BUY']['posflag']
-                        responseVal = runstatus['BUY']['response']
-                        growPersentatge = runstatus['growPersentatge']
-                        index_sl_position = runstatus['index_sl_position']
-                        time.sleep(2)
-                        if posflag==1:
-                            symbol = responseVal['symbol']
-                            
-                            orderid = responseVal['orderid']
-                            order_response = client.orderstatus(
-                                        order_id=orderid,
-                                        strategy="BN_Option_Intraday"
-                                    )
-                            print(order_response)
-                            price = order_response['data']['price']
-                            # trigger_price = price + (price * (growPersentatge+1) / 100)
-                            print(price)
-                            start_date = (datetime.now() - timedelta()).strftime("%Y-%m-%d")
-                            print(start_date)
-                            df = client.history(
-                            symbol=symbol,
-                            exchange="NFO",
-                            interval="5m",
-                            start_date=start_date,
-                            end_date=start_date
-                            )
-                            last_candle = df.iloc[-2]
-                            high_price = last_candle["high"]
-                            low_price = last_candle["low"]
-                            
-                            print(f'index_sl_position : {index_sl_position}')
-                            print(f'symbol : {symbol}')
-                            #last_candle_percentage = ((high_price - low_price) / high_price) * 100                        
-                            print(f'optin_high_price : {high_price}')
-                            greeks = order_utilObj.get_option_greeks(symbol,main_obj.index)
-                            if greeks['greeks']['delta']:
-                                deltaValue = greeks['greeks']['delta']
-                            #slprice = high_price-low_price
-                            slprice = (index_sl_position * abs(deltaValue))
-                            #print("Last Candle %:", round(last_candle_percentage, 2))
-                            print(f'option slprice : {slprice}')
-                            trigger_price = price + slprice
-                            print(f'trigger_price : {trigger_price}')
-                            # Target order
-                            triggerPEBracketOrder(symbol,price,slprice)
-                    
-                    #triggerVal = triggerBuySeLLPE('ATM','SELL')
-        else:
-                # runstatus =  main_obj.order_util.get_running_orders()
-                runstatus =  main_obj.order_util.get_orders_by_stratagy("5EMA")
-                running_orders=[]
-                if len(runstatus)>0:
-                    open_orders_status = [
-                                o for o in runstatus if o.get("order_status") == "open" and o.get("strategy", "").startswith("5EMA_BANKNIFTY")
-                            ]
-                    if len(open_orders_status)==2:
-                        opensymbol = open_orders_status[0]["symbol"]
-                        atm = client.quotes(symbol=opensymbol, exchange='NFO')
-                        data = atm.get("data", {})
-                        if not data:
-                            print("⚠️ Empty quote data:", atm)
-                            continue
-                        else:
-                            if len(atm['data'])>0:
-                                print("📌 ATM STRIKE:", atm['data'])
-                                print(atm['data']['ltp'])
-                                print("**********************************")   
-                                target_order = next(
-                                            (
-                                                o for o in open_orders_status
-                                                if o.get("order_status") == "open"
-                                                and o.get("pricetype") == "LIMIT"
-                                                and o.get("symbol") == opensymbol
-                                            ),
-                                            None
-                                        )
-                                sl_order = next(
-                                            (
-                                                o for o in open_orders_status
-                                                if o.get("order_status") == "open"
-                                                and o.get("pricetype") == "SL-M"
-                                                and o.get("symbol") == opensymbol
-                                            ),
-                                            None
-                                        )
-                                pricedifference_t_l = round(target_order["price"])-round(sl_order['trigger_price'])
-                                pricedifference = round(pricedifference_t_l/2)
-                                print('---------------pricedifference----------------')
-                                print(pricedifference)
-                                new_target_price = target_order["price"]+5
-                                new_sl_price = target_order["price"]-2
-                                new_target_price_escalation = target_order["price"]-1
+    if main_obj.is_after_IST(9, 15):
+        try:
+            #runstatus =  get_running_orders()
+            #break
+            #get_running_orders()
+            if posflag==0:
+                    runstatus = check_signal()                       
+                    if ( runstatus==None or runstatus.get("posflag") != ""):
+                        print(f"❌ -----Waiting for the candles in {main_obj.index}----- ❌")
+                        #break
+                    if (runstatus!=None):
+                        print(runstatus) 
+                        if runstatus.get("BUY"):
+                            posflag = runstatus['BUY']['posflag']
+                            responseVal = runstatus['BUY']['response']
+                            growPersentatge = runstatus['growPersentatge']
+                            index_sl_position = runstatus['index_sl_position']
+                            time.sleep(2)
+                            if posflag==1:
+                                symbol = responseVal['symbol']
                                 
-                                if(atm['data']['ltp']>=new_target_price_escalation and sl_order["trigger_price"]<new_target_price_escalation and sl_order["trigger_price"]!=new_sl_price and sl_order["trigger_price"]<new_sl_price):
-                                    print(atm['data']['ltp'],">=",new_target_price_escalation," and ",sl_order["trigger_price"],"<",new_target_price_escalation,"and",sl_order["trigger_price"],"<=",new_sl_price)
-                                    response = client.modifyorder(
-                                    orderid=target_order["orderid"],
-                                    price=new_target_price,
-                                    trigger_price=0,        # for LIMIT target
-                                    quantity=target_order["quantity"]
-                                    )
-                                    main_obj.order_util.trail_sl_m_safe("5EMA",sl_order,new_sl_price)
-
-  
-                    elif len(open_orders_status)==1:
-                        client.cancelorder(order_id=open_orders_status[0]['orderid'], strategy="5EMA_BANKNIFTY")
-                    # for open_orders in runstatus:
-                    #     #print(f"{open_orders}!")
-                    #     transformed_text = open_orders['strategy'].split('_')
-                    #     open_nifty = ('_'.join(transformed_text[:2]))
-                    #     if open_nifty == '5EMA_BANKNIFTY':
-                    #         running_orders.append({open_nifty:open_orders['pricetype'],'pricetype':open_orders['pricetype'],'orderid':open_orders['orderid']})
-                    # print(len(running_orders))
-                    # open_orders_status = sum(
-                    #     1 for o in runstatus if o.get("order_status") == "open" and o.get("strategy", "").startswith("5EMA_BANKNIFTY")
-                    # )                    
-                    
+                                orderid = responseVal['orderid']
+                                order_response = client.orderstatus(
+                                            order_id=orderid,
+                                            strategy="BN_Option_Intraday"
+                                        )
+                                print(order_response)
+                                price = order_response['data']['price']
+                                # trigger_price = price + (price * (growPersentatge+1) / 100)
+                                print(price)
+                                start_date = (datetime.now() - timedelta()).strftime("%Y-%m-%d")
+                                print(start_date)
+                                df = client.history(
+                                symbol=symbol,
+                                exchange="NFO",
+                                interval="5m",
+                                start_date=start_date,
+                                end_date=start_date
+                                )
+                                last_candle = df.iloc[-2]
+                                high_price = last_candle["high"]
+                                low_price = last_candle["low"]
+                                
+                                print(f'index_sl_position : {index_sl_position}')
+                                print(f'symbol : {symbol}')
+                                #last_candle_percentage = ((high_price - low_price) / high_price) * 100                        
+                                print(f'optin_high_price : {high_price}')
+                                greeks = order_utilObj.get_option_greeks(symbol,main_obj.index)
+                                if greeks['greeks']['delta']:
+                                    deltaValue = greeks['greeks']['delta']
+                                #slprice = high_price-low_price
+                                slprice = (index_sl_position * abs(deltaValue))
+                                #print("Last Candle %:", round(last_candle_percentage, 2))
+                                print(f'option slprice : {slprice}')
+                                trigger_price = price + slprice
+                                print(f'trigger_price : {trigger_price}')
+                                # Target order
+                                triggerPEBracketOrder(symbol,price,slprice)
+                        
+                        #triggerVal = triggerBuySeLLPE('ATM','SELL')
+            else:
                     # runstatus =  main_obj.order_util.get_running_orders()
-                    # print(len(runstatus))
-                if len(runstatus)==0:
-                     posflag=0
-                     
-    except Exception as e:
-        print("Error in while:", e)    
-    time.sleep(5)   # check every 5 seconds
+                    runstatus =  main_obj.order_util.get_orders_by_stratagy("5EMA")
+                    running_orders=[]
+                    if len(runstatus)>0:
+                        open_orders_status = [
+                                    o for o in runstatus if o.get("order_status") == "open" and o.get("strategy", "").startswith("5EMA_BANKNIFTY")
+                                ]
+                        if len(open_orders_status)==2:
+                            opensymbol = open_orders_status[0]["symbol"]
+                            atm_ltp = main_obj.safe_ltp(opensymbol)
+                            # atm = client.quotes(symbol=opensymbol, exchange='NFO')
+                            
+                            if atm_ltp is None:
+                                print("⚠️ Empty data in ATM LTP:", atm_ltp)
+                                continue
+
+                            # data = atm.get("data", {})
+                            # if not data:
+                            #     print("⚠️ Empty quote data:", atm)
+                            #     continue
+                            else:
+                                if atm_ltp>0:
+                                    print("📌 ATM STRIKE:", atm_ltp)
+                                    print("**********************************")   
+                                    target_order = next(
+                                                (
+                                                    o for o in open_orders_status
+                                                    if o.get("order_status") == "open"
+                                                    and o.get("pricetype") == "LIMIT"
+                                                    and o.get("symbol") == opensymbol
+                                                ),
+                                                None
+                                            )
+                                    sl_order = next(
+                                                (
+                                                    o for o in open_orders_status
+                                                    if o.get("order_status") == "open"
+                                                    and o.get("pricetype") == "SL-M"
+                                                    and o.get("symbol") == opensymbol
+                                                ),
+                                                None
+                                            )
+                                    pricedifference_t_l = round(target_order["price"])-round(sl_order['trigger_price'])
+                                    pricedifference = round(pricedifference_t_l/2)
+                                    print('---------------pricedifference----------------')
+                                    print(pricedifference)
+                                    new_target_price = target_order["price"]+5
+                                    new_sl_price = target_order["price"]-2
+                                    new_target_price_escalation = target_order["price"]-1
+                                    if(atm_ltp>=new_target_price_escalation ):
+                                        print("ientered")
+
+                                    if(sl_order["trigger_price"]<new_target_price_escalation and sl_order["trigger_price"]!=new_sl_price and sl_order["trigger_price"]<new_sl_price):
+                                        if(atm_ltp>=new_target_price_escalation):
+                                            print(atm_ltp,">=",new_target_price_escalation," and ",sl_order["trigger_price"],"<",new_target_price_escalation,"and",sl_order["trigger_price"],"<=",new_sl_price)
+                                            response = client.modifyorder(
+                                            order_id=target_order["orderid"],
+                                            action="SELL",
+                                            product="MIS",
+                                            pricetype="LIMIT",
+                                            price=new_target_price,
+                                            quantity=target_order["quantity"],
+                                            exchange="NFO",
+                                            symbol=target_order['symbol'],
+                                            )
+                                            main_obj.order_util.trail_sl_m_safe("5EMA",sl_order,new_sl_price)
+                                        else:
+                                            print(atm_ltp,">=",new_target_price_escalation)
+
+    
+                        elif len(open_orders_status)==1:
+                            client.cancelorder(order_id=open_orders_status[0]['orderid'], strategy="5EMA_BANKNIFTY")
+                        # print(open_orders_status)
+                        # for open_orders in runstatus:
+                        #     #print(f"{open_orders}!")
+                        #     transformed_text = open_orders['strategy'].split('_')
+                        #     open_nifty = ('_'.join(transformed_text[:2]))
+                        #     if open_nifty == '5EMA_BANKNIFTY':
+                        #         running_orders.append({open_nifty:open_orders['pricetype'],'pricetype':open_orders['pricetype'],'orderid':open_orders['orderid']})
+                        # print(len(running_orders))
+                        # open_orders_status = sum(
+                        #     1 for o in runstatus if o.get("order_status") == "open" and o.get("strategy", "").startswith("5EMA_BANKNIFTY")
+                        # )                    
+                        
+                        # runstatus =  main_obj.order_util.get_running_orders()
+                        # print(len(runstatus))
+                    open_orders_status = [ 
+                                    o for o in runstatus if o.get("order_status") == "open" and o.get("strategy", "").startswith(f"5EMA_{main_obj.index}")
+                                ]
+                    todays_orders_status = [
+                                    o for o in runstatus if o.get("order_status") == "BUY" and o.get("strategy", "").startswith(f"5EMA_{main_obj.index}")
+                                ]
+                    # print(len(todays_orders_status))
+                    if len(todays_orders_status)>=3:
+                        if len(open_orders_status)==0:
+                            print('Todays Limit Exceeded---',todays_orders_status)    
+                            break
+                    if len(open_orders_status)==0:
+                        print("-----------------No active orders present-----------Loop continue------------")
+                        posflag=0
+                    else:
+                        posflag=1
+                    # if len(runstatus)==0:
+                    #      posflag=0
+                        
+        except Exception as e:
+            print("Error in while:", e)    
+    else:
+        print("❌ -----Waiting to start at 9:15----- ❌")
+        time.sleep(5)   # check every 5 seconds
     #break

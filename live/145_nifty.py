@@ -47,18 +47,22 @@ while True:
         db.save_options_today(selections)
         time.sleep(5)
     # --- Trade window (after 9:31 before 14:00)
-    if main_obj.is_after_IST(9, 31):
-        if main_obj.is_after_IST(14, 0):
-            print("⛔ TIME EXIT – AFTER 2:00 PM")
+    if main_obj.is_after_IST(9, 35):
+        if main_obj.is_after_IST(12, 0):
+            print("⛔ TIME EXIT – AFTER 12:00 PM")
             break
         print("\n-----------------🚀 EXECUTING TRADES---------------")
         selections = db.get_today_options_as_dict()
+        print(len(selections))
         if len(selections):
               for selected in selections:              
                 print(f"--------------{selected['type']} Run {selected['symbol']} ---------------")                    
                 main_obj.order_util.run_145_option_trade(ENTRY_TRIGGER,SL_POINTS,TARGET_POINTS,
                     symbol=selected["symbol"],
-                    strategy_prefix=(f"145{selected['type']}")
-                )           
+                    strategy_prefix=(f"145{selected['type']}"),
+                    option_strike=selected['type']
+                )       
+        if main_obj.exit_all["PE"]["NIFTY"]  == True and main_obj.exit_all["CE"]["NIFTY"]  == True :
+            break 
     time.sleep(1)
 print("✅ STRATEGY FINISHED")
