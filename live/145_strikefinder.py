@@ -36,14 +36,13 @@ print(now)
 opening_strikes = main_obj.order_util.get_opening_range_strikes(
     expiry_date=expiry_date,
     atm=atm,
-    PRICE_LOW=150,
+    PRICE_LOW=420,
     PRICE_HIGH=170
 )
+
 db.save_options_today(opening_strikes)
 print("📊 OPENING RANGE STRIKES:", opening_strikes)
 
-
-# %%
 # ✅ INSTANTIATE THE CLASS
 main_obj = MainClass('BANKNIFTY')
 db = OptionChainDB("145_BANKNIFTY.db")

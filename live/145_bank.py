@@ -1,4 +1,5 @@
 import sys, os
+from datetime import datetime
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
@@ -8,6 +9,22 @@ from base.MainClass import MainClass
 from base.OptionChainDB import OptionChainDB
 import pandas as pd
 import time
+import itertools
+spinner = itertools.cycle(["|", "/", "-", "\\"])
+os.system("")
+# Define color codes
+class Colors:
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    ENDC = '\033[0m' # Reset color to default
+print("SYS.PATH =", sys.path)
+# while True:
+#     sys.stdout.write(f"\r⏳ Waiting for candle close {next(spinner)}")
+#     sys.stdout.flush()
+#     time.sleep(0.2)
+
 # ============================
 # GLOBAL CONFIG
 # ============================
@@ -27,50 +44,89 @@ expiry_date = main_obj.expiry_date.replace("-", "")
 # SAFE ATM FETCH (ONCE)
 # ============================
 atm = main_obj.get_atm()
+if type(atm) != int and atm['status']=='error':
+    print(atm['message'])
+    sys.exit()
 if not isinstance(atm, int):
     print("❌ ATM FETCH FAILED:", atm)
     raise SystemExit
 
-print("📌 ATM STRIKE:", atm)
-
-# selections = []
-# selections = main_obj.order_util.get_strikes(expiry_date,atm,350,400,STRIKE_STEP = 100,STRIKE_RANGE = 5)
-# selections = [{'symbol': 'NIFTY13JAN2626200PE', 'type': 'PE', 'strike': 26200},{'symbol': 'NIFTY13JAN2625950CE', 'type': 'CE', 'strike': 25950}]
-# selections = main_obj.order_util.get_strikes(expiry_date,atm,350,400)
-# db.save_options_today(selections)
-# rows = db.get_today_options_as_dict()
-# print("📋 Today's options:")
-# for row in rows:
-#     print(row)
-# sys.exit()
-# ============================
-# MAIN LOOP
-# ============================
+print("📌 ATM STRIKE:", atm,"\n")
 while True:
-    # if len(selections)==0:
-    # --- Scan window (9:28 – 9:31)
-    if main_obj.is_after_IST(9, 28) and not main_obj.is_after_IST(9, 31):        
-        print("🔍 SCANNING OPTIONS...")
-        selections = main_obj.order_util.get_strikes(expiry_date,atm,350,400)
-        db.save_options_today(selections)
-        time.sleep(5)
-    # --- Trade window (after 9:31 before 14:00)
-    if main_obj.is_after_IST(9, 35):        
-        if main_obj.is_after_IST(12, 0):
-            print("⛔ TIME EXIT – AFTER 12:00 PM")
-            break
-        print("\n-----------------🚀 EXECUTING TRADES---------------")
+    time_exit=False
+    if main_obj.is_after_IST(9, 35):
+        selections = db.get_today_options_as_dict()  
+        if len(selections)==0:
+            atm = main_obj.get_atm()
+            now = datetime.now().strftime("%Y-%m-%d")
+            opening_strikes = main_obj.order_util.get_opening_range_strikes(
+                expiry_date=expiry_date,
+                atm=atm,
+                PRICE_LOW=350,
+                PRICE_HIGH=400
+            )
+            print(opening_strikes)
+            db.save_options_today(opening_strikes)
+            time.sleep(1)
         selections = db.get_today_options_as_dict()
         if len(selections):
-              for selected in selections:              
-                print(f"--------------{selected['type']} Run {selected['symbol']} ---------------")                        
-                main_obj.order_util.run_145_option_trade(ENTRY_TRIGGER,SL_POINTS,TARGET_POINTS,
-                    symbol=selected["symbol"],
-                    strategy_prefix=(f"145{selected['type']}"),
-                    option_strike=selected['type']
-                )    
-        if main_obj.exit_all["PE"]["BANKNIFTY"]  == True and main_obj.exit_all["CE"]["BANKNIFTY"]  == True  :
-            break          
-    time.sleep(1)
+            # ============================
+            # MAIN LOOP
+            # ============================
+            # expiry_dateVal = main_obj.expiry_date
+            # expiry_date = expiry_dateVal.replace("-", "")
+            # expiry_date = main_obj.expiry_date.replace("-", "")
+            # atm = main_obj.get_atm()
+            # now = datetime.now().strftime("%Y-%m-%d")
+            # print(now)
+            # opening_strikes = main_obj.order_util.get_opening_range_strikes(
+            #     expiry_date=expiry_date,
+            #     atm=atm,
+            #     PRICE_LOW=150,
+            #     PRICE_HIGH=170
+            # )
+            # db.save_options_today(opening_strikes)
+            # print("📊 OPENING RANGE STRIKES:", opening_strikes)
+            # sys.exit()
+
+            # ============================
+            # MAIN LOOP
+            # ============================
+            while True:
+                # if len(selections)==0:
+                # --- Scan window (9:28 – 9:31)
+                # if main_obj.is_after_IST(9, 28) and not main_obj.is_after_IST(9, 31):        
+                #     sys.stdout.write(f"\r⏳  {next(spinner)}")
+                #     sys.stdout.flush()
+                #     print("🔍 SCANNING OPTIONS...")
+                #     selections = main_obj.order_util.get_strikes(expiry_date,atm,350,400)
+                #     db.save_options_today(selections)
+                #     time.sleep(5)
+                # --- Trade window (after 9:31 before 14:00)
+                # if main_obj.is_after_IST(9, 35):
+                if main_obj.is_after_IST(15, 0):
+                    print("⛔ TIME EXIT – AFTER 12:00 PM")
+                    time_exit=True
+                    break
+                print(Colors.BLUE + f"\n-----------------🚀 EXECUTING TRADES--{len(selections)}   :___:    "
+                    f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}-------------"+ Colors.ENDC)
+                for selected in selections:              
+                    print(f"--------------{selected['type']} Run {selected['symbol']} ---------------")                        
+                    main_obj.order_util.run_145_option_trade(ENTRY_TRIGGER,SL_POINTS,TARGET_POINTS,
+                        symbol=selected["symbol"],
+                        strategy_prefix=(f"145{selected['type']}"),
+                        option_strike=selected['type']
+                    )    
+                
+                if main_obj.exit_all["PE"]["BANKNIFTY"]  == True and main_obj.exit_all["CE"]["BANKNIFTY"]  == True  :
+                    break          
+                sys.stdout.write(f"\r⏳ Waiting for candle time {next(spinner)} {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+                sys.stdout.flush()
+                time.sleep(1)
+        else:
+            print("\n-----------------🚀 END TRADES      ---------------")
+
+    if time_exit==True:
+        break  
 db.close()
 print("✅ STRATEGY FINISHED")

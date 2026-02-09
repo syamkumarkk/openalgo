@@ -22,10 +22,14 @@ class MainClass:
             self.quantity = 65
             self.STRIKE_STEP = 50
             self.STRIKE_RANGE =10
+            self.EMA_GAP= 1
+            self.days_limit = 10
         if self.index == "BANKNIFTY":
             self.quantity = 30
             self.STRIKE_STEP = 100
-            self.STRIKE_RANGE =5
+            self.STRIKE_RANGE =20
+            self.EMA_GAP = 3
+            self.days_limit = 5
         self._LAST_LTP_CALL = {}
         self.exit_all = {"PE":{"NIFTY":False,"BANKNIFTY":False},"CE":{"NIFTY":False,"BANKNIFTY":False}}
         # Get API key
@@ -62,7 +66,7 @@ class MainClass:
             offset="ATM",
             option_type="CE",
             action="BUY",
-            quantity=self.qantity,        
+            quantity=self.quantity,        
             pricetype="MARKET",
             product="NRML",
             splitsize=0
@@ -85,7 +89,7 @@ class MainClass:
             offset="ATM",
             option_type="PE",
             action="BUY",
-            quantity=self.qantity,
+            quantity=self.quantity,
             pricetype="MARKET",
             product="NRML",
             splitsize=0

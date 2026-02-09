@@ -6,6 +6,8 @@ from openalgo import api, ta
 from base.MainClass import MainClass
 import pandas as pd
 import time
+import itertools
+spinner = itertools.cycle(["|", "/", "-", "\\"])
 from datetime import datetime, timedelta
 # ✅ INSTANTIATE THE CLASS
 main_obj = MainClass('NIFTY')
@@ -35,7 +37,7 @@ def check_signal(marketOnTheDay=0):
     # -----------------------------
     # Date setup (OpenAlgo standard)
     # -----------------------------
-    if main_obj.is_after_IST(9,30):
+    if main_obj.is_after_IST(9,45):
         #print("✅ Current time is greater than 9:30 AM IST")
         start_date = (datetime.now() - timedelta(days=marketOnTheDay)).strftime("%Y-%m-%d")
     else:
@@ -47,13 +49,12 @@ def check_signal(marketOnTheDay=0):
             start_date   = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d")
         else:
             start_date   = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-   
+    # start_date   = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
     end_date   = (datetime.now() - timedelta(days=0)).strftime("%Y-%m-%d")
     interval   = "5m"
     print(f"start_date : {start_date}")
     print(f"end_date : {end_date}")
-    print(f"\n🔄 Checking NIFTY ({datetime.now()})")
-
+    print(f"🔄 Checking NIFTY ({datetime.now()})")
     df = main_obj.get_last_min_candle(5,-1,start_date,end_date)
 
     # Safety check
@@ -117,106 +118,17 @@ def check_signal(marketOnTheDay=0):
     # -----------------------------
     # Fetch LTP (single call only)
     # -----------------------------
-    ltp = main_obj.safe_ltp("NIFTY","NSE_INDEX")
-    if ltp is not None:
-        atm = round(ltp / 100) * 100
-        print(f"\n📈 NIFTY LTP: {ltp} | ATM: {atm}")
-    else:
-        print("❌ LTP fetch failed:", ltp)
-        return  {'posflag':0,'msg':"Quote fetch failed"}
+    # ltp = main_obj.safe_ltp("NIFTY","NSE_INDEX")
+    # if ltp is not None:
+    #     atm = round(ltp / 100) * 100
+    #     print(f"\n📈 NIFTY LTP: {ltp} | ATM: {atm}")
+    # else:
+    #     print("❌ LTP fetch failed:", ltp)
+    #     return  {'posflag':0,'msg':"Quote fetch failed"}
 
-    return identifyTheTrigger(atm,ltp,previous_ema,previous_low,previous_high,current_ema,current_low)
-def identifyTheTrigger(atm,ltp,previous_ema,previous_low,previous_high,current_ema,current_low):
-    try:
-        # -----------------------------
-        # SIGNAL LOGIC
-        # -----------------------------
-        print(f"previous_low > previous_ema")
-        print(f"{previous_low} > {previous_ema}")
-        if previous_low > previous_ema:
-            print(f"current_low < previous_low")
-            print(f"{current_low} < {previous_low}")
-            if current_low < previous_low:
-                print("✅") 
-                growPersentatge = ((previous_high - current_low) / current_low) * 100
-                #growVal = (previous_high - current_low)
-                #toreachVal = previous_low-growVal
-                index_sl_position = (previous_high - current_low)
-                reachVal = current_low - index_sl_position
-                #stoploss = toreachVal
-                print(f"\n📢 SIGNAL → BUY PE (Price ABOVE EMA 5) {growPersentatge}% - {current_low} ")
-                #print(f"\n📢 toreachVal  {toreachVal} ")
-                triggerVal = triggerBuySeLLPE('ATM','BUY')
-                return {'toreachVal':reachVal,'growPersentatge':growPersentatge,'index_sl_position':index_sl_position, 'BUY':triggerVal}
-        else:
-            print("\n❌ NO SIGNAL")
-            return {'posflag':0,'msg':"NO SIGNAL"}
+    return main_obj.order_util.identify_5ema_trigger(previous_ema,previous_low,previous_high,current_low)
 
-    except Exception as e:
-        print("Error:", e)
-def triggerBuySeLLPE(offset='ATM',BuySeLL='BUY'):
-    try:
-        # ------------------------------------------
-        # Fetch NIFTY Spot (must print immediately)
-        # ------------------------------------------
-        # quote = client.quotes(symbol="NIFTY", exchange="NSE_INDEX")
-        # print("NIFTY QUOTE:", quote)
 
-        # ------------------------------------------
-        # Place BANKNIFTY ATM Option Order - 09DEC25
-        # ------------------------------------------
-        response = client.optionsorder(
-            strategy="5EMA_NIFTY_STRIKE",
-            underlying="NIFTY",          # Underlying Index
-            exchange="NFO",        # Index exchange
-            expiry_date=expiry_date,       # Correct expiry
-            offset=offset,                # Auto-select ATM strike
-            option_type="PE",            # CE or PE
-            action=BuySeLL,                # BUY or SELL
-            quantity=65,                 # 1 Lot = 75
-            pricetype="MARKET",          # MARKET or LIMIT
-            product="MIS",              # NRML or MIS
-            splitsize=0                  # 0 = no split
-        )
-
-        print("ORDER RESPONSE:", response)
-        posflag = 1
-        return {'posflag':1,'response':response,'msg':"success"}
-    except Exception as e:
-        print("Error:", e)
-        return {'posflag':0,'msg':e}
-def triggerPEBracketOrder(symbol,price,slprice,quantity=65):
-    try:
-        trigger_price = price + slprice
-        print("🔁 Square-off at Target Price (LIMIT)")
-        target_response = client.placeorder(
-            strategy="5EMA_NIFTY_TARGET",
-            symbol=symbol,
-            exchange="NFO",
-            action="SELL",
-            price_type="LIMIT",
-            price=trigger_price,
-            product="MIS",
-            quantity=quantity
-        )
-        print("TARGET RESPONSE: ", target_response)
-        sl_price = price - slprice
-        print("🔁 Square-off with Stop Loss (SL-M)")
-        sl_response = client.placeorder(
-                strategy="5EMA_NIFTY_SL",
-                symbol=symbol,
-                exchange="NFO",
-                action="SELL",
-                price_type="SL-M",
-                trigger_price=sl_price,
-                product="MIS",
-                quantity=quantity
-            )
-        print("SL RESPONSE:", sl_response)
-        return sl_response
-    except Exception as e:
-        print("Error:", e)
-        return e
 
 runstatus =  main_obj.order_util.get_running_orders()
 running_orders=[]
@@ -230,7 +142,7 @@ while True:
         print("✅ Current time is greater than 15:15 AM IST")
         break
         sys.exit()
-    if main_obj.is_after_IST(9, 15):
+    if main_obj.is_after_IST(9, 30):
         try:
             
             if posflag==0:
@@ -248,8 +160,7 @@ while True:
                             time.sleep(2)
                             # if and oreder has been placed then the postFlag is true
                             if posflag==1:
-                                symbol = responseVal['symbol']
-                                
+                                symbol = responseVal['symbol']                                
                                 orderid = responseVal['orderid']
                                 order_response = client.orderstatus(
                                             order_id=orderid,
@@ -268,6 +179,8 @@ while True:
                                 start_date=start_date,
                                 end_date=start_date
                                 )
+                                print('df-------------')
+                                print(df)
                                 last_candle = df.iloc[-2]
                                 high_price = last_candle["high"]
                                 low_price = last_candle["low"]
@@ -286,7 +199,7 @@ while True:
                                 trigger_price = price + slprice
                                 print(f'trigger_price : {trigger_price}')
                                 # Target order
-                                triggerPEBracketOrder(symbol,price,slprice)                    
+                                order_utilObj.trigger_5ema_bracketOrder(symbol,price,slprice,orderid)                    
             else:   
                             
                     runstatus =  main_obj.order_util.get_orders_by_stratagy("5EMA")
@@ -298,20 +211,14 @@ while True:
                         if len(open_orders_status)==2:
                             opensymbol = open_orders_status[0]["symbol"]
                             atm_ltp = main_obj.safe_ltp(opensymbol)
-                            # atm = client.quotes(symbol=opensymbol, exchange='NFO')
-                            
+                            # atm = client.quotes(symbol=opensymbol, exchange='NFO')                            
                             if atm_ltp is None:
                                 print("⚠️ Empty data in ATM LTP:", atm_ltp)
                                 continue
-
-                            # data = atm.get("data", {})
-                            # if not data:
-                            #     print("⚠️ Empty quote data:", atm)
-                            #     continue
                             else:
                                 if atm_ltp>0:
                                     print("📌 ATM STRIKE:", atm_ltp)
-                                    print("**********************************")   
+                                    print("***************NIFTY*******************")   
                                     target_order = next(
                                                 (
                                                     o for o in open_orders_status
@@ -347,8 +254,11 @@ while True:
                                         quantity=target_order["quantity"],
                                         exchange="NFO",
                                         symbol=target_order['symbol'],
-                                        )                                    
-                                        main_obj.order_util.trail_sl_m_safe("5EMA",sl_order,new_sl_price)
+                                        )
+                                        print(target_order["strategy"])
+                                        prefix = f"5EMA_{main_obj.index}"
+                                        parent_order_id = target_order["strategy"].removeprefix(prefix).split("_")[1]                               
+                                        main_obj.order_util.trail_sl_m_safe("5EMA",sl_order,new_sl_price,parent_order_id)
 
     
                         elif len(open_orders_status)==1:
@@ -373,6 +283,7 @@ while True:
         except Exception as e:
             print("Error in while:", e)    
     else:
-        print("❌ -----Waiting to start at 9:15----- ❌")
+        sys.stdout.write(f"\r ❌ -----Waiting to start at ----- ❌ ⏳  {next(spinner)}")
+        sys.stdout.flush()
     time.sleep(5)   # check every 5 seconds
     #break
