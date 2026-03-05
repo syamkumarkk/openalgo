@@ -379,6 +379,7 @@ class OpenAlgoOrders:
             #     return True
             # else:
             if True:
+                print(f"🚀 RUN order placing @ {datetime.now()}")
                 ltp = self.parent.safe_ltp(symbol)
                 if ltp is not None:
                     # print("📊 LTP:", ltp)
@@ -562,6 +563,8 @@ class OpenAlgoOrders:
                     print(found_open_from_sltarget_waiting)
                     if found_open_from_sltarget_waiting==0:
                         self.place_145_order_set(ENTRY_TRIGGER,SL_POINTS,TARGET_POINTS,symbol,strategy_prefix,option_strike,placed_order_id)   
+                
+
 
     def run_145_option_trade(self,ENTRY_TRIGGER,SL_POINTS,TARGET_POINTS,symbol,strategy_prefix,option_strike):
         # print(Fore.RED + 'This is red text!')
@@ -948,6 +951,8 @@ class OpenAlgoOrders:
             )
             print("TARGET RESPONSE: ", target_response)
             sl_price = price - slprice
+            if sl_price<=0:
+                sl_price= 0.5
             print("🔁 Square-off with Stop Loss (SL-M)")
             sl_response = self.client.placeorder(
                     strategy=f"5EMA_{self.parent.index}_{orderid}_SL",
@@ -994,21 +999,23 @@ class OpenAlgoOrders:
             # -----------------------------
             # SIGNAL LOGIC
             # -----------------------------
-            print(f"previous_low > previous_ema")
-            print(f"{previous_low} > {previous_ema}")
+            print(f"previous_low : {previous_low} > previous_ema : {previous_ema}")
+            # print(f"{previous_low} > {previous_ema}")
             if previous_low > previous_ema:
                 ema_candle_gap = previous_low - previous_ema
                 if ema_candle_gap>self.parent.EMA_GAP:
-                    print(f"current_low < previous_low")
-                    print(f"{current_low} < {previous_low}")
+                    print(f"current_low : {current_low} < previous_low : {previous_low}")
+                    # print(f"{current_low} < {previous_low}")
                     if current_low < previous_low:
-                        print("✅") 
+                        # print("✅") 
                         growPersentatge = ((previous_high - current_low) / current_low) * 100
-                        index_sl_position = (previous_high - current_low)
-                        reachVal = current_low - index_sl_position
+                        # index_sl_position = (previous_high - current_low)
+                        index_sl_position = (previous_high - previous_low)
+                        # reachVal = current_low - index_sl_position
+                        reachVal = previous_low - index_sl_position
                         print(f"\n📢 SIGNAL → BUY PE (Price ABOVE EMA 5) {growPersentatge}% - {current_low} ")
                         triggerVal = self.trigger_5ema_placeorder('ATM','BUY')
-                        return {'toreachVal':reachVal,'growPersentatge':growPersentatge,'index_sl_position':index_sl_position, 'BUY':triggerVal}
+                        return {'growPersentatge':growPersentatge,'index_sl_position':index_sl_position, 'BUY':triggerVal}
                 else:
                     print("\n❌ NO SIGNAL - EMA very close to candle.")
                     return {'posflag':0,'msg':"NO SIGNAL"}

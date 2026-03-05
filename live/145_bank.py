@@ -30,8 +30,8 @@ print("SYS.PATH =", sys.path)
 # ============================
 ENTRY_TRIGGER = 420
 ENTRY_TRIGGER_BTW = (ENTRY_TRIGGER+5)
-SL_POINTS = 50
-TARGET_POINTS = 60
+SL_POINTS = 30
+TARGET_POINTS = 40
 # ============================
 # INIT
 # ============================

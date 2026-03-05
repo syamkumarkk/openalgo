@@ -179,12 +179,11 @@ while True:
                                 start_date=start_date,
                                 end_date=start_date
                                 )
-                                print('df-------------')
-                                print(df)
+                                # print('df-------------')
+                                # print(df)
                                 last_candle = df.iloc[-2]
                                 high_price = last_candle["high"]
-                                low_price = last_candle["low"]
-                                
+                                low_price = last_candle["low"]                                
                                 print(f'index_sl_position : {index_sl_position}')
                                 print(f'symbol : {symbol}')
                                 #last_candle_percentage = ((high_price - low_price) / high_price) * 100                        
@@ -201,7 +200,7 @@ while True:
                                 # Target order
                                 order_utilObj.trigger_5ema_bracketOrder(symbol,price,slprice,orderid)                    
             else:   
-                            
+                    print("✅ Trail running rrder that is active or running to clear missing orders")        
                     runstatus =  main_obj.order_util.get_orders_by_stratagy("5EMA")
                     running_orders=[]
                     if len(runstatus)>0:

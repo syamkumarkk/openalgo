@@ -23,7 +23,7 @@ class MainClass:
             self.STRIKE_STEP = 50
             self.STRIKE_RANGE =10
             self.EMA_GAP= 1
-            self.days_limit = 10
+            self.days_limit = 5
         if self.index == "BANKNIFTY":
             self.quantity = 30
             self.STRIKE_STEP = 100
