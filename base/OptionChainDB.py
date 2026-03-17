@@ -94,7 +94,7 @@ class OptionChainDB:
     # ----------------------------------------
     # Fetch today's options (dict)
     # ----------------------------------------
-    def get_today_options_as_dict(self):
+    def get_today_options_as_dict_bup(self):
         # print("Fetch today's options (dict)")
         cursor = self.conn.cursor()
         today = datetime.now().strftime("%Y-%m-%d")
@@ -117,6 +117,41 @@ class OptionChainDB:
             for row in cursor.fetchall()
         ]
 
+    def get_today_options_as_dict(self):
+        cursor = self.conn.cursor()
+        today = datetime.now().strftime("%Y-%m-%d")
+        cursor.execute("""
+        SELECT * FROM (
+            SELECT symbol, option_type, strike, ltp, trade_date, trade_time
+            FROM selected_options
+            WHERE trade_date = ? AND option_type = 'PE'
+            ORDER BY ltp DESC
+            LIMIT 1
+        )
+
+        UNION ALL
+
+        SELECT * FROM (
+            SELECT symbol, option_type, strike, ltp, trade_date, trade_time
+            FROM selected_options
+            WHERE trade_date = ? AND option_type = 'CE'
+            ORDER BY ltp DESC
+            LIMIT 1
+        )
+        """, (today, today))
+
+        return [
+            {
+                "symbol": row["symbol"],
+                "type": row["option_type"],
+                "strike": row["strike"],
+                "ltp": row["ltp"],
+                "date": row["trade_date"],
+                "time": row["trade_time"]
+            }
+            for row in cursor.fetchall()
+            
+        ]
     # ----------------------------------------
     def close(self):
         self.conn.close()

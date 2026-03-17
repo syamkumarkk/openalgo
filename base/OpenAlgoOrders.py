@@ -258,10 +258,10 @@ class OpenAlgoOrders:
                 transformed_text = open_orders['strategy'].split('_')
                 open_nifty = ('_'.join(transformed_text[:2])) # Result: '5EMA_NIFTY')
                 stratagyOpenName = (f"{stratagyNameStartsWith}_{self.parent.index}")
-                #print(stratagyOpenName,  '------' , open_nifty)
+                # print(stratagyOpenName,  '------' , open_nifty)
                 if open_nifty == stratagyOpenName:
                     running_orders.append({open_nifty:open_orders['pricetype'],'pricetype':open_orders['pricetype'],'orderid':open_orders['orderid']})
-            #print(len(running_orders))
+            # print(len(running_orders))
             if len(running_orders)==0:
                 posflag=0
             elif len(running_orders)==1:
@@ -274,28 +274,35 @@ class OpenAlgoOrders:
     
     def bracket_targe_sell(self,option_value,sl_price,target_price,order_type="MIS",strategy_prefix="5EMA",order_id=""):
         try:
-            # PLACE SL
-            self.client.placeorder(
-                strategy=f"{strategy_prefix}_{self.parent.index}_{order_id}_SL",
-                symbol=option_value,
-                exchange="NFO",
-                action="SELL",
-                trigger_price=sl_price,
-                price_type="SL-M",
-                product=order_type,
-                quantity=self.parent.quantity
-            )
-            # PLACE TARGET
-            self.client.placeorder(
-                strategy=f"{strategy_prefix}_{self.parent.index}_{order_id}_TARGET",
-                symbol=option_value,
-                exchange="NFO",
-                action="SELL",
-                price_type="LIMIT",
-                price=target_price,
-                product=order_type,
-                quantity=self.parent.quantity
-            )
+            #finding open orders in same order then dont place order 
+            completed_orders =  self.get_orders_by_stratagy(strategy_prefix)
+            placed_order_str_id = f"{strategy_prefix}_{self.parent.index}_{order_id}_"
+            stratagy_status=0
+            open_sl_orders = [  j for j in completed_orders if j.get("symbol")==option_value and placed_order_str_id in j.get("strategy") and j.get("action") == "SELL"]
+            stratagy_status = len(open_sl_orders)
+            if stratagy_status==0:
+                # PLACE SL
+                self.client.placeorder(
+                    strategy=f"{strategy_prefix}_{self.parent.index}_{order_id}_SL",
+                    symbol=option_value,
+                    exchange="NFO",
+                    action="SELL",
+                    trigger_price=sl_price,
+                    price_type="SL-M",
+                    product=order_type,
+                    quantity=self.parent.quantity
+                )
+                # PLACE TARGET
+                self.client.placeorder(
+                    strategy=f"{strategy_prefix}_{self.parent.index}_{order_id}_TARGET",
+                    symbol=option_value,
+                    exchange="NFO",
+                    action="SELL",
+                    price_type="LIMIT",
+                    price=target_price,
+                    product=order_type,
+                    quantity=self.parent.quantity
+                )
             return True
         except Exception as e:
             print("Error in bracket sell order:", e)
@@ -495,7 +502,7 @@ class OpenAlgoOrders:
             order_active = [ 
                         j for j in all_sell_orders_status if j.get("strategy", "").startswith(strategy_name)
                     ]
-            print(f"✅ --------Validation for SL placing-------------\n  {symbol} ")
+            print(f"✅ --------Validation for SL placing-------------  {symbol} ")
             #Check any sl/tareget present on the buy order, if not then check the time and place the sl/target
             # print(order_active)
             # print('complete_sell_orders_status')
@@ -538,7 +545,7 @@ class OpenAlgoOrders:
                 # elif symbol.startswith("NIFTY"):
                 #     strategy_name = strategy_name+"NIFTY_"            
                 strategy_name= strategy_name+k.get("orderid")+"_"        
-                print(f"orders present need to check is any open orders present,\n  {strategy_name} ")
+                print(f" Orders present need to check is any open orders present,\n  {strategy_name} ")
                 placed_order_id=k.get("orderid")
                 time.sleep(1)  # allow exchange to update orderbook
                 # placed_time = None                        
@@ -556,12 +563,20 @@ class OpenAlgoOrders:
                 #     time.sleep(1)
                 if datetime.now() > sl_place_time:
                     print("✅ Candle closed, calculating SL and place order")
-                    # self.bracket_targe_sell(symbol,sl_price,target_price,"MIS",strategy_prefix,placed_order_id)
-                    found_open_from_sltarget_waiting = sum(
-                            1 for o in order_active if o.get("order_status") == "open"
-                        ) 
+                    
+                    found_open_from_sltarget_waitingArr = [ 
+                                        o for o in order_active if o.get("order_status") == "open" 
+                    ]                    
+                    found_open_from_sltarget_waiting = len(found_open_from_sltarget_waitingArr)
                     print(found_open_from_sltarget_waiting)
-                    if found_open_from_sltarget_waiting==0:
+                    if found_open_from_sltarget_waiting==1:
+                        print("open order is present, need to cancel it")
+                        timestamp_open = found_open_from_sltarget_waitingArr[0]["timestamp"]
+                        placed_time = datetime.strptime(timestamp_open, "%Y-%m-%d %H:%M:%S")
+                        currenttime = datetime.now()                        
+                        if (currenttime - placed_time) > timedelta(minutes=5.2):
+                            print("Order older than 5.2 minutes. Cancel order.")
+                            self.client.cancelorder(order_id=found_open_from_sltarget_waitingArr[0]["orderid"], strategy=f"{strategy_prefix}_{self.parent.index}")
                         self.place_145_order_set(ENTRY_TRIGGER,SL_POINTS,TARGET_POINTS,symbol,strategy_prefix,option_strike,placed_order_id)   
                 
 
@@ -578,12 +593,12 @@ class OpenAlgoOrders:
         entry_price = sl_price = target_price = 0        
         completed_orders =  self.get_orders_by_stratagy(strategy_prefix)
         stratagy_status=0
-        completed_oirders = [  j for j in completed_orders if j.get("order_status") == "complete" and j.get("symbol")==symbol and  j.get("action") == "BUY"]
-        stratagy_status = len(completed_oirders)
+        completed_orders = [  j for j in completed_orders if j.get("order_status") == "complete" and j.get("symbol")==symbol and  j.get("action") == "BUY"]
+        stratagy_status = len(completed_orders)
         open_orders_status = sum(
                         1 for o in completed_orders if o.get("order_status") == "open"
                     )   
-        # print(completed_oirders)        
+        # print(completed_orders)        
         if stratagy_status==0:
             # it run only in the beggining of the application that have not placed any order on thestrike
             runstatus = self.place_145_order_set(ENTRY_TRIGGER,SL_POINTS,TARGET_POINTS,symbol,strategy_prefix,option_strike)            
@@ -606,7 +621,8 @@ class OpenAlgoOrders:
             traile_orders = False
             
             if stratagy_status>=execution_limit and open_orders_status==0:
-                for orders_active in completed_oirders:
+                #This is the case where more exicutions happend and neeed to stopp all the open orders
+                for orders_active in completed_orders:
                     open_complete_orders_status = sum(
                         1 for o in completed_orders if o.get("strategy", "").startswith(f"{strategy_prefix}_{self.parent.index}_{orders_active.get('orderid')}")
                     )
@@ -631,12 +647,12 @@ class OpenAlgoOrders:
                         print('open_orders_status',open_sl.get("orderid"))
                         
                         complete_open_orders_status = [ 
-                                                    j for j in completed_orders if j.get("order_status") == "open" and j.get("strategy", "").startswith(f"{strategy_prefix}_{self.parent.index}_{open_sl.get('orderid')}") and j.get("action") == "SELL"
+                                                    j for j in completed_orders if j.get("order_status") == "open" and j.get("strategy", "").startswith(f"{strategy_prefix}_{self.parent.index}_") and j.get("action") == "SELL"
                         ]
                         print("only 2 open orders need if more then it will cleared",len(complete_open_orders_status))
                         if(len(complete_open_orders_status))>2:
                                 complete_open_orders_status_LIMIT = [ 
-                                                    j for j in completed_orders if j.get("order_status") == "open" and j.get("strategy", "").startswith(f"{strategy_prefix}_{self.parent.index}_{open_sl.get('orderid')}") and j.get("action") == "SELL" and j.get("pricetype") == "LIMIT"
+                                                    j for j in completed_orders if j.get("order_status") == "open" and j.get("strategy", "").startswith(f"{strategy_prefix}_{self.parent.index}_") and j.get("action") == "SELL" and j.get("pricetype") == "LIMIT"
                                 ] 
                                 if(len(complete_open_orders_status_LIMIT))>1:
                                     # -----------------------------
@@ -801,12 +817,13 @@ class OpenAlgoOrders:
                                                 None
                                             )
                                         print(open_limit_order)
-                                        print(open_limit_order["orderid"])
-                                        print(open_limit_order["strategy"])
-                                        prefix = f"{strategy_prefix}_{self.parent.index}"
-                                        parent_order_id = open_limit_order["strategy"].removeprefix(prefix).split("_")[1]
-
+                                        parent_order_id = 0
                                         if open_limit_order:
+                                            print(open_limit_order["orderid"])
+                                            print(open_limit_order["strategy"])
+                                            prefix = f"{strategy_prefix}_{self.parent.index}"
+                                            parent_order_id = open_limit_order["strategy"].removeprefix(prefix).split("_")[1]
+
                                             response = self.client.modifyorder(
                                             order_id=open_limit_order["orderid"],
                                             action="SELL",
@@ -817,7 +834,8 @@ class OpenAlgoOrders:
                                             symbol=open_limit_order['symbol'],
                                             exchange="NFO",
                                             )
-                                        self.trail_sl_m_safe(strategy_prefix,open_sl,new_sl,parent_order_id)
+                                        if parent_order_id:
+                                            self.trail_sl_m_safe(strategy_prefix,open_sl,new_sl,parent_order_id)
                                     # break 
                 return True
             else:
@@ -912,7 +930,7 @@ class OpenAlgoOrders:
                     # -----------------------------
                     for _, row in opening_df.iterrows():
                         ltp = row["close"]
-                        # print(row.name.strftime("%H:%M")," - ",symbol,ltp)
+                        print(row.name.strftime("%H:%M")," - ",symbol,ltp)
                         if PRICE_LOW <= ltp <= PRICE_HIGH:
                             print(
                                 f"✅ OPENING MATCH → {symbol} | "
@@ -1015,6 +1033,96 @@ class OpenAlgoOrders:
                         reachVal = previous_low - index_sl_position
                         print(f"\n📢 SIGNAL → BUY PE (Price ABOVE EMA 5) {growPersentatge}% - {current_low} ")
                         triggerVal = self.trigger_5ema_placeorder('ATM','BUY')
+                        return {'growPersentatge':growPersentatge,'index_sl_position':index_sl_position, 'BUY':triggerVal}
+                else:
+                    print("\n❌ NO SIGNAL - EMA very close to candle.")
+                    return {'posflag':0,'msg':"NO SIGNAL"}
+            else:
+                print("\n❌ NO SIGNAL")
+                return {'posflag':0,'msg':"NO SIGNAL"}
+
+        except Exception as e:
+            print("Error:", e)
+
+    def trigger_15ema_placeorder(self,offset='ATM',BuySeLL='BUY'):
+        try:
+            expiry_dateVal = self.parent.expiry_date
+            expiry_date = expiry_dateVal.replace("-", "")
+            # ------------------------------------------
+            # Place ATM Option Order
+            # ------------------------------------------
+            response = self.client.optionsorder(
+                strategy=f"15EMA_{self.parent.index}_STRIKE",
+                underlying=self.parent.index,          # Underlying Index
+                exchange="NFO",        # Index exchange
+                expiry_date=expiry_date,       # Correct expiry
+                offset=offset,                # Auto-select ATM strike
+                option_type="CE",            # CE or PE
+                action=BuySeLL,                # BUY or SELL
+                quantity=self.parent.quantity,                 # 1 Lot = 75
+                pricetype="MARKET",          # MARKET or LIMIT
+                product="MIS",              # NRML or MIS
+                splitsize=0                  # 0 = no split
+            )
+            print("ORDER RESPONSE:", response)
+            return {'posflag':1,'response':response,'msg':"success"}
+        except Exception as e:
+            print("Error:", e)
+
+    def trigger_15ema_bracketOrder(self,symbol,price,slprice,orderid):
+        try:
+            trigger_price = price + slprice
+            print("🔁 Square-off at Target Price (LIMIT)")
+            target_response = self.client.placeorder(
+                strategy=f"15EMA_{self.parent.index}_{orderid}_TARGET",
+                symbol=symbol,
+                exchange="NFO",
+                action="SELL",
+                price_type="LIMIT",
+                price=trigger_price,
+                product="MIS",
+                quantity=self.parent.quantity
+            )
+            print("TARGET RESPONSE: ", target_response)
+            sl_price = price - slprice
+            if sl_price<=0:
+                sl_price= 0.5
+            print("🔁 Square-off with Stop Loss (SL-M)")
+            sl_response = self.client.placeorder(
+                    strategy=f"15EMA_{self.parent.index}_{orderid}_SL",
+                    symbol=symbol,
+                    exchange="NFO",
+                    action="SELL",
+                    price_type="SL-M",
+                    trigger_price=sl_price,
+                    product="MIS",
+                    quantity=self.parent.quantity
+                )
+            print("SL RESPONSE:", sl_response)
+            return sl_response
+        except Exception as e:
+            print("Error:", e)
+            return e
+    def identify_15ema_trigger(self,previous_ema,previous_low,previous_high,current_low,current_high):
+        try:
+            # -----------------------------
+            # SIGNAL LOGIC
+            # -----------------------------
+            print(f"previous_high : {previous_high} < previous_ema : {previous_ema}")
+            # print(f"{previous_low} > {previous_ema}")
+            if previous_high < previous_ema:
+                ema_candle_gap = previous_ema - previous_high
+                if ema_candle_gap>self.parent.EMA_GAP:
+                    print(f"current_high : {current_high} > previous_high : {previous_high}")
+                    if current_high > previous_high:
+                        # print("✅") 
+                        growPersentatge = ((previous_high - current_low) / current_low) * 100
+                        # index_sl_position = (previous_high - current_low)
+                        index_sl_position = (previous_high - previous_low)
+                        # reachVal = current_low - index_sl_position
+                        reachVal = previous_high + index_sl_position
+                        print(f"\n📢 SIGNAL → BUY CE (Price ABOVE EMA 15) {growPersentatge}% - {current_low} ")
+                        triggerVal = self.trigger_15ema_placeorder('ATM','BUY')
                         return {'growPersentatge':growPersentatge,'index_sl_position':index_sl_position, 'BUY':triggerVal}
                 else:
                     print("\n❌ NO SIGNAL - EMA very close to candle.")

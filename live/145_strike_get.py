@@ -11,6 +11,9 @@ from datetime import datetime, timedelta
 # ✅ INSTANTIATE THE CLASS
 # main_obj = MainClass('NIFTY')
 # db = OptionChainDB("145_NIFTY.db")
+# selections = db.get_today_options_as_dict()  
+# print(selections)
+# sys.exit()
 # # ✅ ACCESS INSTANCE VARIABLES
 # client = main_obj.client
 # expiry_dateVal = main_obj.expiry_date
@@ -36,13 +39,13 @@ from datetime import datetime, timedelta
 # opening_strikes = main_obj.order_util.get_opening_range_strikes(
 #     expiry_date=expiry_date,
 #     atm=atm,
-#     PRICE_LOW=150,
+#     PRICE_LOW=420,
 #     PRICE_HIGH=170
 # )
 
 # db.save_options_today(opening_strikes)
 # print("📊 OPENING RANGE STRIKES:", opening_strikes)
-# sys.exit()
+
 # ✅ INSTANTIATE THE CLASS
 main_obj = MainClass('BANKNIFTY')
 db = OptionChainDB("145_BANKNIFTY.db")
