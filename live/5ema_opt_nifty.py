@@ -258,7 +258,22 @@ while True:
                                         prefix = f"5EMA_{main_obj.index}"
                                         parent_order_id = target_order["strategy"].removeprefix(prefix).split("_")[1]                               
                                         main_obj.order_util.trail_sl_m_safe("5EMA",sl_order,new_sl_price,parent_order_id)
-
+                                    else:
+                                        parent_order_id = target_order["strategy"].removeprefix(prefix).split("_")[1]  
+                                        strategy_buyed = [
+                                            o for o in runstatus if o.get("order_status") == "open" and o.get("strategy", "").startswith(f"{strategy_prefix}_{self.parent.index}_{parent_order_id}_BUY")
+                                        ]
+                                        buy_price = open_orders_status[0]["price"]
+                                        print(atm_ltp,">=",buy_price)
+                                        if atm_ltp>=buy_price:
+                                            price_movement = atm_ltp-buy_price
+                                            print (atm_ltp-buy_price)
+                                            if(price_movement>=10):
+                                                print("do increase")
+                                                new_sl_price = atm_ltp-5
+                                                print(target_order["strategy"])
+                                                prefix = f"5EMA_{main_obj.index}"
+                                                main_obj.order_util.trail_sl_m_safe("5EMA",sl_order,new_sl_price,parent_order_id)
     
                         elif len(open_orders_status)==1:
                             client.cancelorder(order_id=open_orders_status[0]['orderid'], strategy=f"5EMA_{main_obj.index}")

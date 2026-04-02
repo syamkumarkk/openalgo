@@ -30,7 +30,6 @@ exit = 0
 target = 0
 deltaValue = 0.50
 expiry_date = expiry_dateVal.replace("-", "")
-# sys.exit
 
 def check_signal(marketOnTheDay=1):
 
@@ -57,9 +56,7 @@ def check_signal(marketOnTheDay=1):
     # start_date   = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
     end_date   = (datetime.now() - timedelta(days=0)).strftime("%Y-%m-%d")
     interval   = "15m"
-    print(f"start_date : {start_date}")
-    print(f"end_date : {end_date}")
-    print(f"🔄 Checking NIFTY ({datetime.now()})")
+    print(f"start_date : {start_date} ||| end_date : {end_date} ||| NIFTY ({datetime.now()})")
     df = main_obj.get_last_min_candle(15,-1,start_date,end_date)
 
     # Safety check
@@ -89,9 +86,8 @@ def check_signal(marketOnTheDay=1):
     # Current (running) candle
     # -----------------------------
     current_candle = df.iloc[-1]
-    print("⏳ Current RUNNING Candle:")
     print(
-        f"Time: {df.index[-1].strftime('%H:%M')} | "
+        f"RUNNING Candle: Time: {df.index[-1].strftime('%H:%M')} | "
         f"Open: {current_candle['open']} | "
         f"High: {current_candle['high']} | "
         f"Low: {current_candle['low']} | "
@@ -338,8 +334,25 @@ while True:
                                         prefix = f"15EMA_{main_obj.index}"
                                         parent_order_id = target_order["strategy"].removeprefix(prefix).split("_")[1]                               
                                         main_obj.order_util.trail_sl_m_safe("15EMA",sl_order,new_sl_price,parent_order_id)
+                                    else:
+                                        parent_order_id = target_order["strategy"].removeprefix(prefix).split("_")[1]  
+                                        strategy_buyed = [
+                                o for o in runstatus if o.get("order_status") == "open" and o.get("strategy", "").startswith(f"{strategy_prefix}_{self.parent.index}_{parent_order_id}_BUY")
+                            ]
+                                        buy_price = open_orders_status[0]["price"]
+                                        print(atm_ltp,">=",buy_price)
+                                        if atm_ltp>=buy_price:
+                                            price_movement = atm_ltp-buy_price
+                                            print (atm_ltp-buy_price)
+                                            if(price_movement>=10):
+                                                print("do increase")
+                                                new_sl_price = atm_ltp-5
+                                                print(target_order["strategy"])
+                                                prefix = f"5EMA_{main_obj.index}"                                              
 
-    
+                                                main_obj.order_util.trail_sl_m_safe("5EMA",sl_order,new_sl_price,parent_order_id)
+
+        
                         elif len(open_orders_status)==1:
                             client.cancelorder(order_id=open_orders_status[0]['orderid'], strategy=f"15EMA_{main_obj.index}")
                     

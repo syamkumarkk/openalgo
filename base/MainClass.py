@@ -2,11 +2,12 @@
 from base.OpenAlgoOrders import OpenAlgoOrders
 from base.TrailingTargetStopPercent import TrailingTargetStopPercent
 from base.OpenAlgoExpiry import OpenAlgoExpiry
-import os,pytz,time
+import os,pytz,time,sys
 from openalgo import api
 import pandas as pd
 from datetime import datetime, timedelta, time as dtime
 from dotenv import load_dotenv
+sys.stdout.reconfigure(encoding='utf-8')
 class MainClass:
     def __init__(self,index='NIFTY'):        
         load_dotenv()
@@ -34,6 +35,8 @@ class MainClass:
         self.exit_all = {"PE":{"NIFTY":False,"BANKNIFTY":False},"CE":{"NIFTY":False,"BANKNIFTY":False}}
         # Get API key
         api_key = os.getenv('OPENALGO_APIKEY')
+        api_key = '4cfcf6297aef8d53a2e537f8c58ad5bd43ade2320684b414a302f3f41ae43a47'
+        print(api_key)
         if not api_key:
             raise EnvironmentError("❌ OPENALGO_APIKEY environment variable not set")
 
@@ -48,7 +51,7 @@ class MainClass:
         self.order_util = OpenAlgoOrders(self)
         self.trailing_target = TrailingTargetStopPercent(entry_price=100,    sl_pct=20, target_pct=40,    trail_step_pct=10)
         self.expiry_date = self.expiry_util.nearest_expiry(self.index,self.exchangeExpiory)        
-
+        
         print("📅 Using Expiry:", self.expiry_date)
         
 

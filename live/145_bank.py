@@ -59,13 +59,14 @@ while True:
         if len(selections)==0:
             atm = main_obj.get_atm()
             now = datetime.now().strftime("%Y-%m-%d")
+            #print(now)
             opening_strikes = main_obj.order_util.get_opening_range_strikes(
                 expiry_date=expiry_date,
                 atm=atm,
                 PRICE_LOW=350,
                 PRICE_HIGH=400
             )
-            print(opening_strikes)
+            #print(opening_strikes)
             db.save_options_today(opening_strikes)
             time.sleep(1)
         selections = db.get_today_options_as_dict()
@@ -108,8 +109,8 @@ while True:
                     print("⛔ TIME EXIT – AFTER 12:00 PM")
                     time_exit=True
                     break
-                print(Colors.BLUE + f"\n-----------------🚀 EXECUTING TRADES--{len(selections)}   :___:    "
-                    f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}-------------"+ Colors.ENDC)
+                print(f"\n-----------------🚀 EXECUTING TRADES--{len(selections)} -------------")
+                print(f"-----------------🚀{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}-------------")
                 for selected in selections:              
                     print(f"--------------{selected['type']} Run {selected['symbol']} ---------------")                        
                     main_obj.order_util.run_145_option_trade(ENTRY_TRIGGER,SL_POINTS,TARGET_POINTS,
@@ -117,11 +118,14 @@ while True:
                         strategy_prefix=(f"145{selected['type']}"),
                         option_strike=selected['type']
                     )    
-                
+                    main_obj.order_util.trail_145_option_trade(ENTRY_TRIGGER,SL_POINTS,TARGET_POINTS,
+                        symbol=selected["symbol"],
+                        strategy_prefix=(f"145{selected['type']}"),
+                        option_strike=selected['type']
+                    )
                 if main_obj.exit_all["PE"]["BANKNIFTY"]  == True and main_obj.exit_all["CE"]["BANKNIFTY"]  == True  :
                     break          
-                sys.stdout.write(f"\r⏳ Waiting for candle time {next(spinner)} {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-                sys.stdout.flush()
+                print(f"\r⏳ Waiting for candle time {datetime.now().strftime('%Y-%m-%d %H:%M')}")  
                 time.sleep(1)
         else:
             print("\n-----------------🚀 END TRADES      ---------------")

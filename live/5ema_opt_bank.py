@@ -15,6 +15,7 @@ main_obj = MainClass('BANKNIFTY')
 # ✅ ACCESS INSTANCE VARIABLES
 client = main_obj.client
 expiry_dateVal = main_obj.expiry_date
+
 order_utilObj = main_obj.order_util
 main_obj.debug = False # True to show array prints
 pd.set_option('display.max_rows', None)
@@ -220,6 +221,7 @@ while True:
                         open_orders_status = [
                                     o for o in runstatus if o.get("order_status") == "open" and o.get("strategy", "").startswith("5EMA_BANKNIFTY")
                                 ]
+                        print(len(open_orders_status))
                         if len(open_orders_status)==2:
                             opensymbol = open_orders_status[0]["symbol"]
                             atm_ltp = main_obj.safe_ltp(opensymbol)
@@ -284,16 +286,34 @@ while True:
                                             parent_order_id = target_order["strategy"].removeprefix(prefix).split("_")[1]                               
                                             main_obj.order_util.trail_sl_m_safe("5EMA",sl_order,new_sl_price,parent_order_id)
                                         else:
-                                            print(atm_ltp,">=",new_target_price_escalation)
+                                            parent_order_id = target_order["strategy"].removeprefix(prefix).split("_")[1]  
+                                            strategy_buyed = [
+                                    o for o in runstatus if o.get("order_status") == "open" and o.get("strategy", "").startswith(f"{strategy_prefix}_{self.parent.index}_{parent_order_id}_BUY")
+                                ]
+                                            buy_price = open_orders_status[0]["price"]
+                                            print(atm_ltp,">=",buy_price)
+                                            if atm_ltp>=buy_price:
+                                                price_movement = atm_ltp-buy_price
+                                                print (atm_ltp-buy_price)
+                                                if(price_movement>=10):
+                                                    print("do increase")
+                                                    new_sl_price = atm_ltp-5
+                                                    print(target_order["strategy"])
+                                                    prefix = f"5EMA_{main_obj.index}"                                              
+
+                                                    main_obj.order_util.trail_sl_m_safe("5EMA",sl_order,new_sl_price,parent_order_id)
+
 
     
                         elif len(open_orders_status)==1:
                             client.cancelorder(order_id=open_orders_status[0]['orderid'], strategy="5EMA_BANKNIFTY")
-                    
+                        elif len(open_orders_status)>2:
+                            print("need code for remove unwanted valid orders")
                     todays_orders_status = [
-                                    o for o in runstatus if o.get("order_status") == "BUY" and o.get("strategy", "").startswith(f"5EMA_{main_obj.index}")
+                                    o for o in runstatus if o.get("action") == "BUY" and o.get("strategy", "").startswith(f"5EMA_{main_obj.index}")
                                 ]
-                    # print(len(todays_orders_status))
+                    # print(runstatus)
+                    print(len(todays_orders_status))
                     if len(todays_orders_status)>=3:
                         if len(open_orders_status)==0:
                             print('Todays Limit Exceeded---',todays_orders_status)    
