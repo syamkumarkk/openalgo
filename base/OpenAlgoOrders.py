@@ -811,6 +811,33 @@ class OpenAlgoOrders:
         )
         return True
     
+    def manage_trades_untracked(self,strategy_prefix,order,target_order_id,parent_order_id="",ltp=""):
+        time.sleep(1)
+        #print(f"{strategy_prefix} LTP : {ltp} target: {target_order_id} sl: {order}")
+        if (ltp <= order["sl"]):
+                        print(f"🛑 SL HIT : {order['symbol']}")
+                        print(f"⚠ SL FAILED : {order['symbol']}")                
+                        # ==========================================
+                        # CANCEL OLD
+                        # ==========================================            
+                        self.client.cancelorder(order_id=order['orderid'], strategy=f"{strategy_prefix}_{self.parent.index}")
+                        time.sleep(0.5)   
+                        self.client.cancelorder(order_id=target_order_id)
+                        time.sleep(0.5)            
+                        # ==========================================
+                        # PLACE NEW Market
+                        # ==========================================      
+                        self.client.placeorder(            
+                            strategy=f"EMERGENCY_EXIT{strategy_prefix}_{self.parent.index}_{parent_order_id}",            
+                            symbol=order['symbol'],            
+                            action="SELL",            
+                            exchange="NFO",            
+                            price_type="MARKET",            
+                            product="MIS",            
+                            quantity=self.parent.quantity
+                        )
+
+        return True
     def trail_145_option_trade(self,ENTRY_TRIGGER,SL_POINTS,TARGET_POINTS,symbol,strategy_prefix,option_strike):
         print("trail_145_option_trade",strategy_prefix)
         execution_limit=self.parent.days_limit    
@@ -1232,22 +1259,130 @@ class OpenAlgoOrders:
                 and o.get("action") == "SELL"
                 and o.get("pricetype") == "SL-M"           
                 and o.get("order_status") in ["open", "trigger pending"]
+                and o.get("exchange") == "NFO" 
+                
             ]
             print("Orders to cancel:", order_ids_to_cancel)
             # Close oder with market price
             if len(order_ids_to_cancel)<=0:
                 for pos in positions['data']:
-                    
-                    if pos['quantity'] < 0:  # active position
-                        qty_to_close = abs(pos['quantity'])
-                        action = 'BUY'   
-                        print(pos['product'])                     
-                        self.client.placeorder(
-                            strategy=f"negative_balance",
-                            symbol=pos['symbol'],
-                            exchange="NFO",
-                            action="BUY",
-                            product="MIS",
-                            quantity=qty_to_close,
-                            pricetype='MARKET'
-                        )
+                    #print(pos)
+                    if pos['exchange']!='NSE':
+                        if pos['quantity'] < 0:  # active position
+                            qty_to_close = abs(pos['quantity'])
+                            action = 'BUY'   
+                            print(pos['product'])                     
+                            self.client.placeorder(
+                                strategy=f"negative_balance",
+                                symbol=pos['symbol'],
+                                exchange="NFO",
+                                action="BUY",
+                                product="MIS",
+                                quantity=qty_to_close,
+                                pricetype='MARKET'
+                            )
+                    # elif pos['exchange']=='NSE':
+                    #     if pos['pnl'] < -100:  # active position
+                    #         qty_to_close = abs(pos['quantity'])
+                    #         action = 'BUY'   
+                    #         print(pos['product'])                     
+                    #         self.client.placeorder(
+                    #             strategy=f"negative_balance",
+                    #             symbol=pos['symbol'],
+                    #             exchange="NSE",
+                    #             action="BUY",
+                    #             product="MIS",
+                    #             quantity=qty_to_close,
+                    #             pricetype='MARKET'
+                    #         )
+
+
+    # =========================================================
+    # MANAGE TRADES
+    # =========================================================
+    def manage_trades(self,symbol,strategy_prefix):
+        print(
+            f"\n"
+            f"{'=' * 70}\n"
+            f"✅ MANAGE SQUARE-OFF ON SKIPPED TARGETS - START\n"
+            f"{'-' * 70}\n"
+            f"📌 SYMBOL   : {symbol}\n"
+            f"📌 STRATEGY : {strategy_prefix}\n"
+            f"{'=' * 70}\n"
+        )
+        execution_limit=self.parent.days_limit    
+        completed_orders_full =  self.get_orders_by_stratagy(strategy_prefix)
+        completed_orders =  completed_orders_full
+        stratagy_status=0
+        completed_orders = [  j for j in completed_orders if j.get("order_status") == "complete" and j.get("symbol")==symbol and  j.get("action") == "BUY"]
+        stratagy_status = len(completed_orders)        
+        if stratagy_status!=0:
+            completed_sell_orders = [  j for j in completed_orders_full if  j.get("symbol")==symbol and  j.get("action") == "SELL"]           
+            open_orders_status = sum(
+                        1 for o in completed_sell_orders if o.get("order_status") == "open"
+                    )   
+            #print('  -----------  open_orders_status ----------- \n | ',stratagy_status,'/',execution_limit,' \n | Open orders :',open_orders_status)
+            #print('  ------------------------------------------- \n')            
+            for open_sl in completed_sell_orders:
+                print("Start un identified SL/TG")
+                             
+                if open_sl.get("order_status") == "open" and open_sl.get("strategy", "").endswith("_SL"):              
+                        ltp = self.parent.safe_ltp(open_sl.get("symbol"),"NFO")                        
+                        if ltp is None:
+                            print(f"\n📈 {open_sl.get('symbol')} LTP open is {ltp}")
+                            continue
+                        else:
+                            try:
+                                open_target_to_cancel = next(
+                                                (
+                                                    o for o in completed_sell_orders
+                                                    if o.get("strategy", "").endswith("_TARGET")
+                                                    and o.get("order_status") == "open"
+                                                ),
+                                                None
+                                            )                                
+                                print(open_sl)
+                                print(open_target_to_cancel)        
+                                if open_target_to_cancel!=None:
+                                    open_target_to_cancel_id=open_target_to_cancel["orderid"]
+                                # =============================================
+                                # SL HIT
+                                # =============================================
+                                if (
+                                    open_sl.get("trigger_price") is not None
+                                    and
+                                    ltp < open_sl["trigger_price"]
+                                ):
+                                    print(f"🛑 SL HIT : {symbol}")
+                                    print(f"⚠ SL FAILED : {symbol}")                     
+                                    # ==========================================
+                                    # CANCEL OLD
+                                    # ==========================================            
+                                    self.client.cancelorder(order_id=open_sl["orderid"])
+                                    time.sleep(0.5)   
+                                    self.client.cancelorder(order_id=open_target_to_cancel_id)
+                                    time.sleep(0.5)            
+                                    # ==========================================
+                                    # PLACE NEW Market SELL
+                                    # ==========================================      
+                                    self.client.placeorder(            
+                                        strategy="EMERGENCY_EXIT",            
+                                        symbol=symbol,            
+                                        action="SELL",            
+                                        exchange="NFO",            
+                                        price_type="MARKET",            
+                                        product="MIS",            
+                                        quantity=self.parent.quantity
+                                    )
+                                            
+                            except Exception as e:
+                                print("manage_trades", symbol, e)
+        print(
+            f"\n"
+            f"{'=' * 70}\n"
+            f"✅ MANAGE SQUARE-OFF ON SKIPPED TARGETS - END\n"
+            f"{'-' * 70}\n"
+            f"📌 SYMBOL   : {symbol}\n"
+            f"📌 STRATEGY : {strategy_prefix}\n"
+            f"{'=' * 70}\n"
+        )
