@@ -16,5 +16,6 @@ expiry_date = main_obj.expiry_date.replace("-", "")
 atm = main_obj.get_atm()
 now = datetime.now().strftime("%Y-%m-%d")
 while True:
+    print(datetime.now())
     main_obj.order_util.cancel_an_order()
     time.sleep(30)

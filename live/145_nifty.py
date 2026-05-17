@@ -89,12 +89,13 @@ while True:
                         symbol=selected["symbol"],
                         strategy_prefix=(f"145{selected['type']}"),
                         option_strike=selected['type']
-                    )    
-                    main_obj.order_util.trail_145_option_trade(ENTRY_TRIGGER,SL_POINTS,TARGET_POINTS,
-                        symbol=selected["symbol"],
-                        strategy_prefix=(f"145{selected['type']}"),
-                        option_strike=selected['type']
                     )
+                    main_obj.order_util.trail_145_option_trade(ENTRY_TRIGGER,SL_POINTS,TARGET_POINTS,
+                                                   symbol=selected["symbol"],
+                                                   strategy_prefix=(f"145{selected['type']}"),
+                                                   option_strike=selected['type'])
+                    time.sleep(1)
+                    main_obj.order_util.manage_trades(symbol=selected["symbol"],strategy_prefix=(f"145{selected['type']}"))
                 if main_obj.exit_all["PE"]["NIFTY"]  == True and main_obj.exit_all["CE"]["NIFTY"]  == True  :
                     break 
                 print(f"\r⏳ Waiting for candle time {datetime.now().strftime('%Y-%m-%d %H:%M')}")         

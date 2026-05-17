@@ -274,7 +274,9 @@ while True:
                                                 print(target_order["strategy"])
                                                 prefix = f"5EMA_{main_obj.index}"
                                                 main_obj.order_util.trail_sl_m_safe("5EMA",sl_order,new_sl_price,parent_order_id)
-    
+                            #time.sleep(1)
+                            #manage_trades_untracked("5EMA",sl_order,target_order["orderid"],parent_order_id,atm_ltp)
+                            #time.sleep(1)
                         elif len(open_orders_status)==1:
                             client.cancelorder(order_id=open_orders_status[0]['orderid'], strategy=f"5EMA_{main_obj.index}")
                     

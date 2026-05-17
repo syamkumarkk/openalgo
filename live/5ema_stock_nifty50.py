@@ -23,13 +23,14 @@ main_obj.debug = False
 # =========================================================
 
 INTERVAL = "5m"
-TARGET_POINTS = 10
-SL_BUFFER = 2
+TARGET_POINTS = 5
+SL_BUFFER = 5
 EMA_GAP = 0.5
-QUANTITY = 1
-
+QUANTITY = 2
+TARGET_BUFFER = 4 # value to increase
+TARGET_SL_BUFFER = 2 #value for sl near to target
 # =========================================================
-# NIFTY50
+# NIFTY50 BAJAJ-AUTO MARUTI 
 # =========================================================
 NIFTY50 = [
 "ICICIBANK",
@@ -64,8 +65,6 @@ NIFTY50 = [
 "INDIGO",
 "ITC",
 "GRASIM",
-"MARUTI",
-"BAJAJ-AUTO",
 "JIOFIN",
 "WIPRO",
 "TATACONSUM",
@@ -332,6 +331,9 @@ def restore_active_trades():
                     quantity=QUANTITY
                 )
                 print("SL :", sl_response)
+                sl_response_id = (sl_response['orderid'] if sl_response['orderid'] else None)
+            else:
+                 sl_response_id = (sl_order['orderid'] if sl_order['orderid'] else None)
             
             # =============================================
             # FIND TARGET ORDER
@@ -369,12 +371,21 @@ def restore_active_trades():
                     product="MIS",
                     quantity=QUANTITY
                 )
+                target_response_id = (target_response['orderid'] if target_response['orderid'] else None)
+            else:
+                 target_response_id = (target_order['orderid'] if target_order['orderid'] else None)
+            target_stratagy_name = f"{strategy_name}_{orderid_buy}_TARGET"
+            sl_stratagy_name = f"{strategy_name}_{orderid_buy}_SL"
             active_trades[symbol] = {
                 "symbol": symbol,
                 "qty": int(p["quantity"]),
                 "entry": avgprice,
+                "sl_id": sl_response_id,
                 "sl": sl_price,
-                "target": target_price
+                "sl_stratagy_name": sl_stratagy_name,
+                "target_id": target_response_id,
+                "target": target_price,
+                "target_stratagy_name": target_stratagy_name,
             }
             
         #print("✅ RESTORED")
@@ -396,7 +407,7 @@ def manage_trades():
             ltp = main_obj.safe_ltp(symbol, "NSE")
             if ltp is None:
                 continue
-            print(f"{symbol} LTP : {ltp}")
+            print(f"{symbol} LTP : {ltp} target: {trade["target"]} sl: {trade["sl"]}")
             # =============================================
             # TARGET HIT
             # =============================================
@@ -406,7 +417,25 @@ def manage_trades():
                 ltp <= trade["target"]
             ):
                 print(f"🎯 TARGET HIT : {symbol}")
-                remove_symbols.append(symbol)
+                # ==========================================
+                # CANCEL OLD
+                # ==========================================            
+                client.cancelorder(order_id=trade["sl_id"])
+                time.sleep(0.5)   
+                client.cancelorder(order_id=trade["target_id"])
+                time.sleep(0.5)            
+                # ==========================================
+                # PLACE NEW Market
+                # ==========================================      
+                client.placeorder(            
+                    strategy="EMERGENCY_EXIT",            
+                    symbol=symbol,            
+                    action="BUY",            
+                    exchange="NSE",            
+                    price_type="MARKET",            
+                    product="MIS",            
+                    quantity=QUANTITY
+                )
             # =============================================
             # SL HIT
             # =============================================
@@ -416,11 +445,86 @@ def manage_trades():
                 ltp >= trade["sl"]
             ):
                 print(f"🛑 SL HIT : {symbol}")
-                remove_symbols.append(symbol)
+                print(f"⚠ SL FAILED : {symbol}")            
+                #print(f"LTP : {ltp} > SL : {trigger_price}")            
+                # ==========================================
+                # CANCEL OLD
+                # ==========================================            
+                client.cancelorder(order_id=trade["sl_id"])
+                time.sleep(0.5)   
+                client.cancelorder(order_id=trade["target_id"])
+                time.sleep(0.5)            
+                # ==========================================
+                # PLACE NEW Market
+                # ==========================================      
+                client.placeorder(            
+                    strategy="EMERGENCY_EXIT",            
+                    symbol=symbol,            
+                    action="BUY",            
+                    exchange="NSE",            
+                    price_type="MARKET",            
+                    product="MIS",            
+                    quantity=QUANTITY
+                )
         except Exception as e:
             print("manage_trades", symbol, e)
-    for s in remove_symbols:
-        active_trades.pop(s, None)
+
+# =========================================================
+# TRAIL TRADES
+# =========================================================
+def trail_trades():
+    active_trades = restore_active_trades()
+    print(active_trades)
+    remove_symbols = []
+    for symbol, trade in active_trades.items():
+        try:
+            ltp = main_obj.safe_ltp(symbol, "NSE")
+            if ltp is None:
+                continue
+            print(f"{symbol} LTP : {ltp} target: {trade["target"]} sl: {trade["sl"]}")
+            # =============================================
+            # TARGET REACHING
+            # =============================================
+            if (trade.get("target") is not None):
+                new_sl_val = trade["target"]+TARGET_SL_BUFFER
+                if (ltp<new_sl_val):
+                    new_safety_sl_val = new_sl_val+1
+                    new_target_val = trade["target"]-TARGET_BUFFER
+
+                    print(f"🎯 TARGET HIT : {symbol}")
+                    # ==========================================
+                    # CANCEL OLD
+                    # ==========================================            
+                    client.cancelorder(order_id=trade["sl_id"])
+                    time.sleep(0.5)   
+                    client.modifyorder(
+                        order_id=trade["target_id"],
+                        action="SELL",
+                        product="MIS",
+                        pricetype="LIMIT",
+                        price=new_target_val,
+                        quantity=QUANTITY,
+                        symbol=symbol,
+                        exchange="NSE",
+                        )
+                    time.sleep(0.5)                    
+                    # ==========================================
+                    # PLACE NEW Market
+                    # ==========================================      
+                    client.placeorder(            
+                        strategy=trade["sl_stratagy_name"],          
+                        symbol=symbol,            
+                        action="BUY",
+                        price=new_safety_sl_val,
+                        exchange="NSE",            
+                        price_type="SL-M",            
+                        product="MIS",            
+                        quantity=QUANTITY
+                    )
+                    
+        except Exception as e:
+            print("manage_trades", symbol, e)
+            
 # =========================================================
 # INITIAL RESTORE
 # =========================================================
@@ -473,6 +577,8 @@ while True:
             # MANAGE ACTIVE TRADES
             # =============================================
             print ("manage trade starts")
+            trail_trades()
+            time.sleep(0.2)
             manage_trades()
         else:
             sys.stdout.write(                f"\r⏳ Waiting Market Open {next(spinner)}"            )
